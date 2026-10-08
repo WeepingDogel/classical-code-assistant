@@ -1105,25 +1105,25 @@ static void ResizeControls(
         hMessage,
         x,
         y + height - 75,
-        width - 160,
+        width - 185,
         23,
         TRUE
     );
 
     MoveWindow(
         hHistory,
-        x + width - 160,
+        x + width - 180,
         y + height - 75,
-        75,
+        100,
         23,
         TRUE
     );
 
     MoveWindow(
         hSend,
-        x + width - 80,
+        x + width - 75,
         y + height - 75,
-        80,
+        75,
         23,
         TRUE
     );
@@ -1463,7 +1463,7 @@ static void CreateControls(
         BS_PUSHBUTTON,
         0,
         0,
-        90,
+        100,
         23,
         hwnd,
         (HMENU)IDC_HISTORY,
