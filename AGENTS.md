@@ -161,18 +161,27 @@ Current source layout:
 
 ```text
 src/
-├── main.cpp
-├── gui.cpp
-├── gui.h
-├── config.cpp
-├── config.h
-├── history.cpp
-└── history.h
+├── client/
+│   ├── main.cpp
+│   ├── gui.cpp
+│   ├── gui.h
+│   ├── config.cpp
+│   ├── config.h
+│   ├── history.cpp
+│   ├── history.h
+│   ├── http.cpp
+│   └── json.cpp
+└── server/
+    └── main.py
 ```
+
+The `client/` directory holds the native Win32 application.
+
+The `server/` directory holds the optional Linux AI gateway.
 
 Responsibilities:
 
-### `main.cpp`
+### `client/main.cpp`
 
 Application entry point.
 
@@ -185,11 +194,11 @@ Responsibilities:
 
 Do not put large GUI implementations here.
 
-### `gui.h`
+### `client/gui.h`
 
 GUI declarations and public GUI interfaces.
 
-### `gui.cpp`
+### `client/gui.cpp`
 
 Win32 GUI implementation.
 
@@ -203,25 +212,60 @@ Responsibilities:
 * window resizing;
 * UI events.
 
-### `config.h`
+### `client/config.h`
 
 Configuration structures and public configuration APIs.
 
-### `config.cpp`
+### `client/config.cpp`
 
 INI file handling and provider configuration.
 
 Do not put GUI code in this file.
 
-### `history.h`
+### `client/history.h`
 
 Chat history file APIs.
 
-### `history.cpp`
+### `client/history.cpp`
 
 Per-provider chat log storage: append, load, and directory management.
 
 Does not know about the GUI.
+
+### `client/http.cpp`
+
+Minimal HTTP client for Windows 2000.
+
+Responsibilities:
+
+* open a TCP socket to the gateway;
+* send a plain HTTP request;
+* read and return the response body.
+
+No TLS, no modern networking assumptions.
+
+### `client/json.cpp`
+
+Minimal JSON helpers.
+
+Responsibilities:
+
+* build the request JSON string;
+* extract the AI response text from the response JSON.
+
+Kept intentionally simple to stay compatible with old MinGW.
+
+### `server/main.py`
+
+Optional Linux AI gateway.
+
+Responsibilities:
+
+* accept HTTP requests from the Windows client;
+* forward them to a real AI provider;
+* keep the client free of modern TLS complexity.
+
+The gateway is not required for the client to build and run.
 
 ---
 
@@ -421,7 +465,8 @@ The legacy HTTP gateway architecture is intended for controlled environments.
 A typical build command is:
 
 ```bash
-g++ src/main.cpp src/gui.cpp src/config.cpp src/history.cpp \
+g++ src/client/main.cpp src/client/gui.cpp src/client/config.cpp \
+    src/client/history.cpp src/client/http.cpp src/client/json.cpp \
     -o classical-code-assistant.exe \
     -mwindows \
     -lcomctl32 \
@@ -431,16 +476,18 @@ g++ src/main.cpp src/gui.cpp src/config.cpp src/history.cpp \
 When compiling individual source files:
 
 ```bash
-g++ -c src/main.cpp
-g++ -c src/gui.cpp
-g++ -c src/config.cpp
-g++ -c src/history.cpp
+g++ -c src/client/main.cpp
+g++ -c src/client/gui.cpp
+g++ -c src/client/config.cpp
+g++ -c src/client/history.cpp
+g++ -c src/client/http.cpp
+g++ -c src/client/json.cpp
 ```
 
 Then link:
 
 ```bash
-g++ main.o gui.o config.o history.o \
+g++ main.o gui.o config.o history.o http.o json.o \
     -o classical-code-assistant.exe \
     -mwindows \
     -lcomctl32 \

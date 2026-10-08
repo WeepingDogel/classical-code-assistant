@@ -114,19 +114,40 @@ of communicating with an actual AI provider.
 classical-code-assistant/
 │
 ├── src/
-│   ├── main.cpp
-│   ├── gui.cpp
-│   ├── gui.h
-│   ├── config.cpp
-│   ├── config.h
-│   ├── history.cpp
-│   └── history.h
+│   ├── client/
+│   │   ├── main.cpp
+│   │   ├── gui.cpp
+│   │   ├── gui.h
+│   │   ├── config.cpp
+│   │   ├── config.h
+│   │   ├── history.cpp
+│   │   ├── history.h
+│   │   ├── http.cpp
+│   │   └── json.cpp
+│   └── server/
+│       └── main.py
 │
 ├── README.md
-├── CONTRIBUTION.md
+├── CONTRIBUTING.md
 ├── AGENTS.md
 └── .gitignore
 ```
+
+| File                       | Purpose                                             |
+|---------------------------|-----------------------------------------------------|
+| `src/client/main.cpp`     | Application entry point and message loop.          |
+| `src/client/gui.cpp/h`    | Win32 GUI: tabs, chat, settings, provider list.    |
+| `src/client/config.cpp/h` | INI-based provider configuration.                   |
+| `src/client/history.cpp/h`| Per-provider chat log storage and loading.          |
+| `src/client/http.cpp`     | Windows 2000 compatible HTTP client.                |
+| `src/client/json.cpp`     | Minimal JSON request / response helpers.            |
+| `src/server/main.py`      | Linux AI gateway (Phase 3, planned).                |
+
+The `src/client/` directory holds the native Win32 application.
+
+The `src/server/` directory will hold the optional Linux AI gateway that
+translates modern AI provider APIs into plain HTTP responses the
+Windows 2000 client can understand.
 
 ## Configuration
 
@@ -195,7 +216,9 @@ g++ main.cpp gui.cpp config.cpp history.cpp -o classical-code-assistant.exe -mwi
 Or, from the project root:
 
 ```bash
-g++ src/main.cpp src/gui.cpp src/config.cpp src/history.cpp \
+g++ src/client/main.cpp src/client/gui.cpp \
+    src/client/config.cpp src/client/history.cpp \
+    src/client/http.cpp src/client/json.cpp \
     -o classical-code-assistant.exe \
     -mwindows \
     -lcomctl32 \
