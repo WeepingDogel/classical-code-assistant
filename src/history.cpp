@@ -5,6 +5,21 @@
 #include <string.h>
 
 
+/*
+ * Compatibility definition.
+ *
+ * INVALID_FILE_ATTRIBUTES is not
+ * available on old MinGW / Dev-C++.
+ * We define it here so that the
+ * project can be built with the
+ * same toolchains it targets.
+ */
+#ifndef INVALID_FILE_ATTRIBUTES
+#define INVALID_FILE_ATTRIBUTES \
+    ((DWORD)-1)
+#endif
+
+
 static char g_logDir[MAX_PATH];
 static int g_logDirReady = 0;
 
