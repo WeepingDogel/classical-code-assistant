@@ -1,0 +1,7 @@
+# Local runtime artifacts
+config.ini
+chatlog/
+*.exe
+*.obj
+*.o
+*.d

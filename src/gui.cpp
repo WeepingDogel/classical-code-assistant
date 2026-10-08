@@ -1,8 +1,10 @@
 #include "gui.h"
 #include "config.h"
+#include "history.h"
 
 #include <windows.h>
 #include <commctrl.h>
+#include <commdlg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -60,6 +62,7 @@
 #define IDC_MESSAGE         1103
 #define IDC_SEND            1104
 #define IDC_PROGRESS        1105
+#define IDC_HISTORY         1106
 
 #define IDC_PROVIDER_LABEL  1200
 #define IDC_PROVIDER        1201
@@ -98,6 +101,15 @@ static HWND hResponse;
 static HWND hMessage;
 static HWND hSend;
 static HWND hProgress;
+static HWND hHistory;
+
+/*
+ * Stashed copy of the last user message
+ * so that FinishFakeRequest() can append
+ * both sides of the exchange to the
+ * history log.
+ */
+static char g_lastUserMessage[2048];
 
 
 /* Settings */
@@ -111,6 +123,13 @@ static HWND hSystemPrompt;
 static HWND hNewProvider;
 static HWND hSaveProvider;
 static HWND hDeleteProvider;
+
+/* Settings labels */
+static HWND hProviderLabel;
+static HWND hEndpointLabel;
+static HWND hApiKeyLabel;
+static HWND hModelLabel;
+static HWND hSystemPromptLabel;
 
 static BOOL g_waiting = FALSE;
 static int g_progressPosition = 0;
@@ -502,6 +521,201 @@ static void DeleteProvider()
 
 
 /* -------------------------------------------------------
+ * View chat history
+ * ------------------------------------------------------- */
+
+/*
+ * Open the file picker in the chatlog
+ * directory and load the chosen file
+ * into the response box.
+ */
+static void ViewHistory()
+{
+    char logDir[MAX_PATH];
+    static char buffer[262144];
+    char fileName[MAX_PATH];
+    char fileTitle[MAX_PATH];
+    char status[300];
+    OPENFILENAMEA ofn;
+
+    /*
+     * Make sure the log directory is
+     * present so the picker can use
+     * it as the starting location.
+     */
+    if (!HistoryEnsureDir())
+    {
+        MessageBoxA(
+            hMain,
+            "Unable to prepare the chat history directory.",
+            "Classical Code Assistant",
+            MB_OK | MB_ICONERROR
+        );
+
+        return;
+    }
+
+    /*
+     * GetOpenFileNameA needs the
+     * directory as its initial folder.
+     * Use HistoryFileFor(0) and trim
+     * the file name, which gives us
+     * the directory path cheaply.
+     */
+    {
+        const char *path = HistoryFileFor(0);
+        char *p;
+
+        strncpy(
+            logDir,
+            path,
+            sizeof(logDir) - 1
+        );
+
+        logDir[sizeof(logDir) - 1] = '\0';
+
+        p = strrchr(logDir, '\\');
+
+        if (p != NULL)
+        {
+            *(p + 1) = '\0';
+        }
+    }
+
+    /*
+     * If no log files exist yet,
+     * inform the user and skip the
+     * dialog.
+     */
+    if (!HistoryExists(ConfigGetActiveProvider()))
+    {
+        /*
+         * Check whether ANY provider
+         * has a log.  If none do,
+         * say so.
+         */
+        int i;
+        int any = 0;
+
+        for (i = 0;
+             i < ConfigGetProviderCount();
+             i++)
+        {
+            if (HistoryExists(i))
+            {
+                any = 1;
+                break;
+            }
+        }
+
+        if (!any)
+        {
+            MessageBoxA(
+                hMain,
+                "No chat history yet.",
+                "Classical Code Assistant",
+                MB_OK | MB_ICONINFORMATION
+            );
+
+            return;
+        }
+    }
+
+    ZeroMemory(
+        &ofn,
+        sizeof(ofn)
+    );
+
+    ofn.lStructSize =
+        sizeof(ofn);
+
+    ofn.hwndOwner =
+        hMain;
+
+    ofn.lpstrFilter =
+        "Provider logs (*.txt)\0*.txt\0All files (*.*)\0*.*\0";
+
+    ofn.nFilterIndex = 1;
+
+    ofn.lpstrFile =
+        fileName;
+
+    ofn.nMaxFile =
+        sizeof(fileName);
+
+    ofn.lpstrFileTitle =
+        fileTitle;
+
+    ofn.nMaxFileTitle =
+        sizeof(fileTitle);
+
+    ofn.lpstrInitialDir =
+        logDir;
+
+    ofn.Flags =
+        OFN_FILEMUSTEXIST |
+        OFN_HIDEREADONLY |
+        OFN_PATHMUSTEXIST;
+
+    if (GetOpenFileNameA(&ofn) != TRUE)
+    {
+        /*
+         * User cancelled.
+         */
+        return;
+    }
+
+    if (!HistoryLoad(
+        fileName,
+        buffer,
+        sizeof(buffer)
+    ))
+    {
+        MessageBoxA(
+            hMain,
+            "Unable to read the selected file.",
+            "Classical Code Assistant",
+            MB_OK | MB_ICONERROR
+        );
+
+        return;
+    }
+
+    SetWindowTextA(
+        hResponse,
+        buffer
+    );
+
+    /*
+     * Show which file is being
+     * viewed in the status bar.
+     */
+    {
+        const char *base;
+
+        base = fileTitle;
+
+        if (base == NULL ||
+            base[0] == '\0')
+        {
+            base = ofn.lpstrFile;
+        }
+
+        wsprintfA(
+            status,
+            "Viewing history: %s",
+            base
+        );
+
+        SetWindowTextA(
+            hStatus,
+            status
+        );
+    }
+}
+
+
+/* -------------------------------------------------------
  * Fake AI request
  * ------------------------------------------------------- */
 
@@ -531,6 +745,21 @@ static void StartFakeRequest()
 
         return;
     }
+
+    /*
+     * Remember the user text so it can
+     * be logged together with the AI
+     * reply when the request finishes.
+     */
+    strncpy(
+        g_lastUserMessage,
+        message,
+        sizeof(g_lastUserMessage) - 1
+    );
+
+    g_lastUserMessage[
+        sizeof(g_lastUserMessage) - 1
+    ] = '\0';
 
     g_waiting = TRUE;
     g_progressPosition = 0;
@@ -638,6 +867,19 @@ static void FinishFakeRequest()
         hSend,
         TRUE
     );
+
+    /*
+     * Log this exchange to the active
+     * provider's chat history file.
+     * Failures are ignored: a history
+     * write error should never block
+     * the response from being shown.
+     */
+    HistoryAppend(
+        ConfigGetActiveProvider(),
+        g_lastUserMessage,
+        response
+    );
 }
 
 
@@ -706,6 +948,11 @@ static void UpdateTabVisibility()
         tab == 0 ? SW_SHOW : SW_HIDE
     );
 
+    ShowWindow(
+        hHistory,
+        tab == 0 ? SW_SHOW : SW_HIDE
+    );
+
 
     ShowWindow(
         hProvider,
@@ -744,6 +991,31 @@ static void UpdateTabVisibility()
 
     ShowWindow(
         hDeleteProvider,
+        tab == 1 ? SW_SHOW : SW_HIDE
+    );
+
+    ShowWindow(
+        hProviderLabel,
+        tab == 1 ? SW_SHOW : SW_HIDE
+    );
+
+    ShowWindow(
+        hEndpointLabel,
+        tab == 1 ? SW_SHOW : SW_HIDE
+    );
+
+    ShowWindow(
+        hApiKeyLabel,
+        tab == 1 ? SW_SHOW : SW_HIDE
+    );
+
+    ShowWindow(
+        hModelLabel,
+        tab == 1 ? SW_SHOW : SW_HIDE
+    );
+
+    ShowWindow(
+        hSystemPromptLabel,
         tab == 1 ? SW_SHOW : SW_HIDE
     );
 }
@@ -833,16 +1105,25 @@ static void ResizeControls(
         hMessage,
         x,
         y + height - 75,
-        width - 85,
+        width - 160,
+        23,
+        TRUE
+    );
+
+    MoveWindow(
+        hHistory,
+        x + width - 160,
+        y + height - 75,
+        75,
         23,
         TRUE
     );
 
     MoveWindow(
         hSend,
-        x + width - 75,
+        x + width - 80,
         y + height - 75,
-        75,
+        80,
         23,
         TRUE
     );
@@ -868,6 +1149,51 @@ static void ResizeControls(
 
     controlWidth =
         width - labelWidth;
+
+    MoveWindow(
+        hProviderLabel,
+        x,
+        y + 3,
+        labelWidth - 5,
+        20,
+        TRUE
+    );
+
+    MoveWindow(
+        hEndpointLabel,
+        x,
+        y + 38,
+        labelWidth - 5,
+        20,
+        TRUE
+    );
+
+    MoveWindow(
+        hApiKeyLabel,
+        x,
+        y + 73,
+        labelWidth - 5,
+        20,
+        TRUE
+    );
+
+    MoveWindow(
+        hModelLabel,
+        x,
+        y + 108,
+        labelWidth - 5,
+        20,
+        TRUE
+    );
+
+    MoveWindow(
+        hSystemPromptLabel,
+        x,
+        y + 143,
+        labelWidth - 5,
+        20,
+        TRUE
+    );
 
 
     MoveWindow(
@@ -1128,15 +1454,34 @@ static void CreateControls(
     );
 
 
+    hHistory = CreateWindowA(
+        "BUTTON",
+        "View History",
+        WS_CHILD |
+        WS_VISIBLE |
+        WS_TABSTOP |
+        BS_PUSHBUTTON,
+        0,
+        0,
+        90,
+        23,
+        hwnd,
+        (HMENU)IDC_HISTORY,
+        g_hInstance,
+        NULL
+    );
+
+
     /*
      * Settings controls.
      */
 
-    CreateLabel(
-        hwnd,
-        "Provider:",
-        IDC_PROVIDER_LABEL
-    );
+    hProviderLabel =
+        CreateLabel(
+            hwnd,
+            "Provider:",
+            IDC_PROVIDER_LABEL
+        );
 
     hProvider = CreateWindowA(
         "COMBOBOX",
@@ -1174,11 +1519,12 @@ static void CreateControls(
     );
 
 
-    CreateLabel(
-        hwnd,
-        "Endpoint:",
-        IDC_ENDPOINT_LABEL
-    );
+    hEndpointLabel =
+        CreateLabel(
+            hwnd,
+            "Endpoint:",
+            IDC_ENDPOINT_LABEL
+        );
 
     hEndpoint = CreateWindowA(
         "EDIT",
@@ -1197,11 +1543,12 @@ static void CreateControls(
     );
 
 
-    CreateLabel(
-        hwnd,
-        "API Key:",
-        IDC_APIKEY_LABEL
-    );
+    hApiKeyLabel =
+        CreateLabel(
+            hwnd,
+            "API Key:",
+            IDC_APIKEY_LABEL
+        );
 
     hApiKey = CreateWindowA(
         "EDIT",
@@ -1221,11 +1568,12 @@ static void CreateControls(
     );
 
 
-    CreateLabel(
-        hwnd,
-        "Model:",
-        IDC_MODEL_LABEL
-    );
+    hModelLabel =
+        CreateLabel(
+            hwnd,
+            "Model:",
+            IDC_MODEL_LABEL
+        );
 
     hModel = CreateWindowA(
         "EDIT",
@@ -1244,11 +1592,12 @@ static void CreateControls(
     );
 
 
-    CreateLabel(
-        hwnd,
-        "System Prompt:",
-        IDC_SYSTEM_LABEL
-    );
+    hSystemPromptLabel =
+        CreateLabel(
+            hwnd,
+            "System Prompt:",
+            IDC_SYSTEM_LABEL
+        );
 
     hSystemPrompt = CreateWindowA(
         "EDIT",
@@ -1311,6 +1660,79 @@ static void CreateControls(
     LoadProviderToControls(
         ConfigGetActiveProvider()
     );
+
+    /*
+     * Auto-load the active provider's
+     * chat log into the response box,
+     * if one exists.  This gives the
+     * user a persistent view of the
+     * conversation from the previous
+     * run.
+     */
+    {
+        int active;
+        static char logBuffer[262144];
+        char logPath[MAX_PATH];
+        char loadStatus[300];
+        const char *shortName;
+
+        active =
+            ConfigGetActiveProvider();
+
+        if (active >= 0 &&
+            HistoryExists(active))
+        {
+            /*
+             * Copy the path out of the
+             * static buffer returned by
+             * HistoryFileFor so we
+             * keep it stable for the
+             * lifetime of this block.
+             */
+            strncpy(
+                logPath,
+                HistoryFileFor(active),
+                sizeof(logPath) - 1
+            );
+
+            logPath[sizeof(logPath) - 1] = '\0';
+
+            shortName =
+                strrchr(logPath, '\\');
+
+            if (shortName != NULL)
+            {
+                shortName++;
+            }
+            else
+            {
+                shortName = logPath;
+            }
+
+            if (HistoryLoad(
+                logPath,
+                logBuffer,
+                sizeof(logBuffer)
+            ))
+            {
+                SetWindowTextA(
+                    hResponse,
+                    logBuffer
+                );
+
+                wsprintfA(
+                    loadStatus,
+                    "Loaded history: %s",
+                    shortName
+                );
+
+                SetWindowTextA(
+                    hStatus,
+                    loadStatus
+                );
+            }
+        }
+    }
 
     UpdateTabVisibility();
 }
@@ -1418,6 +1840,14 @@ LRESULT CALLBACK GuiWindowProc(
             if (id == IDC_DELETE_PROVIDER)
             {
                 DeleteProvider();
+
+                return 0;
+            }
+
+
+            if (id == IDC_HISTORY)
+            {
+                ViewHistory();
 
                 return 0;
             }

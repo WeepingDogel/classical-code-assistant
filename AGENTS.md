@@ -165,7 +165,9 @@ src/
 ├── gui.cpp
 ├── gui.h
 ├── config.cpp
-└── config.h
+├── config.h
+├── history.cpp
+└── history.h
 ```
 
 Responsibilities:
@@ -210,6 +212,16 @@ Configuration structures and public configuration APIs.
 INI file handling and provider configuration.
 
 Do not put GUI code in this file.
+
+### `history.h`
+
+Chat history file APIs.
+
+### `history.cpp`
+
+Per-provider chat log storage: append, load, and directory management.
+
+Does not know about the GUI.
 
 ---
 
@@ -301,13 +313,18 @@ The application may use:
 
 ```text
 comctl32
+comdlg32
 ```
 
-The linker flag is:
+The linker flags are:
 
 ```text
 -lcomctl32
+-lcomdlg32
 ```
+
+`comdlg32` is required for the standard file-open dialog used by the
+chat history viewer.
 
 Do not use:
 
@@ -404,10 +421,11 @@ The legacy HTTP gateway architecture is intended for controlled environments.
 A typical build command is:
 
 ```bash
-g++ src/main.cpp src/gui.cpp src/config.cpp \
+g++ src/main.cpp src/gui.cpp src/config.cpp src/history.cpp \
     -o classical-code-assistant.exe \
     -mwindows \
-    -lcomctl32
+    -lcomctl32 \
+    -lcomdlg32
 ```
 
 When compiling individual source files:
@@ -416,18 +434,21 @@ When compiling individual source files:
 g++ -c src/main.cpp
 g++ -c src/gui.cpp
 g++ -c src/config.cpp
+g++ -c src/history.cpp
 ```
 
 Then link:
 
 ```bash
-g++ main.o gui.o config.o \
+g++ main.o gui.o config.o history.o \
     -o classical-code-assistant.exe \
     -mwindows \
-    -lcomctl32
+    -lcomctl32 \
+    -lcomdlg32
 ```
 
-Do not put `-lcomctl32` into a compile-only command using `-c`.
+Do not put `-lcomctl32` or `-lcomdlg32` into a compile-only command
+using `-c`.
 
 ---
 

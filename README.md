@@ -93,6 +93,7 @@ Current / planned features include:
 * Model configuration
 * System prompt configuration
 * INI-based configuration
+* Persistent per-provider chat history
 * Classic Windows-style progress indicator
 * No external GUI framework
 
@@ -117,7 +118,9 @@ classical-code-assistant/
 │   ├── gui.cpp
 │   ├── gui.h
 │   ├── config.cpp
-│   └── config.h
+│   ├── config.h
+│   ├── history.cpp
+│   └── history.h
 │
 ├── README.md
 ├── CONTRIBUTION.md
@@ -153,6 +156,28 @@ SystemPrompt=You are a helpful AI assistant.
 The configuration file should not be committed to Git because it may contain
 API keys.
 
+## Chat History
+
+Chat history is stored as plain-text files next to the executable, in a
+`chatlog\` directory:
+
+```text
+chatlog\
+├── Provider0.txt
+├── Provider1.txt
+└── ...
+```
+
+Each file holds timestamped user/AI exchanges, one per provider.  The files
+are opened with Notepad or any text editor on Windows 2000.
+
+* The **View History** button on the Chat tab opens the `chatlog\` folder in
+  a file picker, and loads the chosen log into the response box.
+* The active provider's log is also auto-loaded when the app starts, so the
+  last conversation is visible right away.
+* When a new response arrives, both the user's message and the AI's reply are
+  appended to the active provider's log.
+
 ## Building
 
 The project is intended to be buildable with old MinGW toolchains.
@@ -164,16 +189,17 @@ A modern compiler is not required for the core project.
 Example:
 
 ```bash
-g++ main.cpp gui.cpp config.cpp -o classical-code-assistant.exe -mwindows -lcomctl32
+g++ main.cpp gui.cpp config.cpp history.cpp -o classical-code-assistant.exe -mwindows -lcomctl32 -lcomdlg32
 ```
 
 Or, from the project root:
 
 ```bash
-g++ src/main.cpp src/gui.cpp src/config.cpp \
+g++ src/main.cpp src/gui.cpp src/config.cpp src/history.cpp \
     -o classical-code-assistant.exe \
     -mwindows \
-    -lcomctl32
+    -lcomctl32 \
+    -lcomdlg32
 ```
 
 ### Important: `-lcomctl32`
@@ -201,16 +227,19 @@ g++ -c gui.cpp
 Then link:
 
 ```bash
-g++ main.o gui.o config.o -o classical-code-assistant.exe -mwindows -lcomctl32
+g++ main.o gui.o config.o history.o -o classical-code-assistant.exe -mwindows -lcomctl32 -lcomdlg32
 ```
 
 In old Dev-C++, put:
 
 ```text
--lcomctl32
+-lcomctl32 -lcomdlg32
 ```
 
 in the linker parameters rather than the compile-only parameters.
+
+`-lcomdlg32` is required for the chat history file picker
+(`GetOpenFileNameA`).
 
 ## Windows 2000 Compatibility
 
@@ -293,7 +322,7 @@ The application should remain understandable even when viewed years later.
 * [x] Provider selection
 * [x] Provider configuration
 * [x] INI configuration
-* [ ] Persistent chat history
+* [x] Persistent chat history
 
 ### Phase 2 — Network Layer
 
