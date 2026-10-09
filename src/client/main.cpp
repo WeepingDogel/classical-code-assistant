@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "gui.h"
+#include "http.h"
 
 
 /*
@@ -22,6 +23,20 @@ int WINAPI WinMain(
     ConfigInitialize();
     ConfigLoad();
 
+    /*
+     * Initialize Winsock before the
+     * gateway connection layer is used.
+     */
+    if (!HttpInitialize())
+    {
+        MessageBoxA(
+            NULL,
+            "Unable to initialize networking.",
+            "Error",
+            MB_ICONERROR
+        );
+        return 1;
+    }
 
     /*
      * Create the main window.
@@ -31,6 +46,7 @@ int WINAPI WinMain(
         nCmdShow
     ) == NULL)
     {
+        HttpShutdown();
         return 1;
     }
 
@@ -48,6 +64,8 @@ int WINAPI WinMain(
         TranslateMessage(&msg);
         DispatchMessageA(&msg);
     }
+
+    HttpShutdown();
 
     return msg.wParam;
 }

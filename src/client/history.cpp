@@ -10,9 +10,6 @@
  *
  * INVALID_FILE_ATTRIBUTES is not
  * available on old MinGW / Dev-C++.
- * We define it here so that the
- * project can be built with the
- * same toolchains it targets.
  */
 #ifndef INVALID_FILE_ATTRIBUTES
 #define INVALID_FILE_ATTRIBUTES \
@@ -24,15 +21,6 @@ static char g_logDir[MAX_PATH];
 static int g_logDirReady = 0;
 
 
-/*
- * Locate the chatlog directory next to
- * the executable and make sure it
- * exists.
- *
- * Uses the same GetModuleFileNameA +
- * strrchr('\\') trick as config.cpp
- * for compatibility with old MinGW.
- */
 int HistoryEnsureDir(void)
 {
     char exePath[MAX_PATH];
@@ -65,12 +53,6 @@ int HistoryEnsureDir(void)
         exePath
     );
 
-    /*
-     * CreateDirectoryA returns 0 on
-     * failure; the common "already
-     * exists" case is not an error
-     * for our purposes.
-     */
     if (!CreateDirectoryA(
         g_logDir,
         NULL
@@ -90,52 +72,32 @@ int HistoryEnsureDir(void)
 }
 
 
-/*
- * Build the full path to a provider's
- * log file and return it through a
- * static buffer.
- */
-const char *HistoryFileFor(
-    int providerIndex
-)
+const char *HistoryFilePath(void)
 {
     static char path[MAX_PATH];
-    char base[MAX_PATH];
 
     HistoryEnsureDir();
 
     wsprintfA(
-        base,
-        "%sProvider%d.txt",
-        g_logDir,
-        providerIndex
-    );
-
-    strcpy(
         path,
-        base
+        "%schatlog.txt",
+        g_logDir
     );
 
     return path;
 }
 
 
-/*
- * Check whether a log file already
- * exists for a provider.
- */
-int HistoryExists(
-    int providerIndex
-)
+int HistoryExists(void)
 {
     const char *path;
 
-    if (providerIndex < 0)
+    if (!HistoryEnsureDir())
     {
         return 0;
     }
 
-    path = HistoryFileFor(providerIndex);
+    path = HistoryFilePath();
 
     if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES)
     {
@@ -146,16 +108,7 @@ int HistoryExists(
 }
 
 
-/*
- * Append one user/AI exchange to the
- * log for a provider.
- *
- * Each exchange produces two timestamped
- * lines so that the file stays
- * readable in Notepad on Windows 2000.
- */
 void HistoryAppend(
-    int providerIndex,
     const char *userText,
     const char *aiText
 )
@@ -166,17 +119,12 @@ void HistoryAppend(
     char line[4096];
     DWORD written;
 
-    if (providerIndex < 0)
-    {
-        return;
-    }
-
     if (!HistoryEnsureDir())
     {
         return;
     }
 
-    path = HistoryFileFor(providerIndex);
+    path = HistoryFilePath();
 
     hFile = CreateFileA(
         path,
@@ -193,10 +141,6 @@ void HistoryAppend(
         return;
     }
 
-    /*
-     * Move to end of file so we
-     * append instead of overwrite.
-     */
     SetFilePointer(
         hFile,
         0,
@@ -206,11 +150,6 @@ void HistoryAppend(
 
     GetLocalTime(&st);
 
-    /*
-     * The user line.  We keep a
-     * simple "USER:" / "AI:" tag
-     * so the format stays trivial.
-     */
     {
         int n;
 
@@ -238,9 +177,6 @@ void HistoryAppend(
         }
     }
 
-    /*
-     * The AI line.
-     */
     {
         int n;
 
@@ -272,14 +208,6 @@ void HistoryAppend(
 }
 
 
-/*
- * Read a log file into a buffer.
- *
- * Capped at maxBytes characters; the
- * caller is responsible for supplying
- * enough room.  The result is always
- * NUL-terminated on success.
- */
 int HistoryLoad(
     const char *path,
     char *buffer,
@@ -324,11 +252,6 @@ int HistoryLoad(
         return 0;
     }
 
-    /*
-     * Do not read more than the
-     * caller's buffer allows.
-     * Leave one byte for NUL.
-     */
     bytesToRead = available;
 
     if (bytesToRead >= (DWORD)maxBytes)

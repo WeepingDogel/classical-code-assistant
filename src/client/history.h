@@ -2,45 +2,42 @@
 #define CLASSICAL_HISTORY_H
 
 /*
- * Per-provider chat history.
+ * Chat history for the gateway conversation.
  *
- * Logs are stored as plain text files in
- * <exedir>\chatlog\Provider<index>.txt
- * so that each provider keeps its own
- * conversation across restarts.
+ * Logs are stored as a plain text file
+ * <exedir>\chatlog\chatlog.txt
+ * so that the conversation persists
+ * across restarts.
  */
 
 
 /*
- * Append a user/AI exchange to the log for
- * the given provider index.
+ * Append a user/AI exchange to the log.
  */
 void HistoryAppend(
-    int providerIndex,
     const char *userText,
     const char *aiText
 );
 
 
 /*
- * Return the full path to the log file
- * for a provider index.
+ * Return the full path to the log file.
  *
  * The returned pointer references an
  * internal static buffer that is
  * overwritten on the next call.
  */
-const char *HistoryFileFor(
-    int providerIndex
+const char *HistoryFilePath(
+    void
 );
 
 
 /*
- * Return TRUE if the log file for this
- * provider exists on disk.
+ * Return TRUE if the log file exists
+ * on disk.
  */
 int HistoryExists(
-    int providerIndex
+    void
 );
 
 
