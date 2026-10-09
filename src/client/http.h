@@ -1,7 +1,29 @@
 #ifndef CLASSICAL_HTTP_H
 #define CLASSICAL_HTTP_H
 
-#include <winsock2.h>
+/*
+ * Compatibility with old MinGW / Dev-C++ toolchains.
+ *
+ * The system winsock2.h shipped with old Dev-C++ contains an
+ * unbalanced #endif (GCC reports it around line 46) that aborts
+ * the build.  Instead of pulling in that broken header, this
+ * project ships its own minimal, ABI-correct shim at
+ *   src/client/winsock2_compat.h
+ * which declares only the Winsock types and functions the HTTP
+ * layer uses.  It is included via a relative path so the system
+ * header is never reached.
+ *
+ * WIN32_LEAN_AND_MEAN must be defined before <windows.h> is
+ * included so that windows.h does not pull in winsock.h
+ * (which conflicts with the SOCKET type in the shim).
+ *
+ * Link with:  -lws2_32
+ */
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#include "winsock2_compat.h"
 
 
 /*

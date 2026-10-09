@@ -1,11 +1,34 @@
-#include "http.h"
+/*
+ * Include the local Winsock2 compatibility shim, which
+ * replaces the broken system winsock2.h shipped with
+ * old Dev-C++ (see winsock2_compat.h).
+ *
+ * Link with:  -lws2_32
+ */
+#include "winsock2_compat.h"
+
 #include "json.h"
 #include "config.h"
 
 #include <windows.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+
+
+/*
+ * Compatibility with old MinGW / Dev-C++ winsock2.h.
+ *
+ * The very old winsock2.h shipped with Dev-C++ may leave
+ * INVALID_SOCKET, FD_READ and isdigit undeclared even
+ * when <string.h> is included later.  Provide fallbacks.
+ */
+#ifndef INVALID_SOCKET
+#define INVALID_SOCKET ((SOCKET)-1)
+#endif
+
+#ifndef FD_READ
+#define FD_READ 1
+#endif
 
 
 static int g_wsReady = 0;

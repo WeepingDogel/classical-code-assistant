@@ -1,7 +1,12 @@
+/*
+ * Include http.h first: it pulls in winsock2_compat.h,
+ * which provides the Winsock types used by this project
+ * without touching the broken system winsock2.h.
+ */
+#include "http.h"
 #include "gui.h"
 #include "config.h"
 #include "history.h"
-#include "http.h"
 
 #include <windows.h>
 #include <commctrl.h>
